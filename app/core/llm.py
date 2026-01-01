@@ -1,6 +1,5 @@
 import base64
 import json
-import logging
 import os
 from typing import Any, Dict, List, Optional
 
@@ -9,155 +8,47 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Logger setup
-logger = logging.getLogger(__name__)
-
-# Configuration - Support both OpenAI and OpenRouter
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENROUTER_API_KEY = os.getenv(
-    "OPENROUTER_API_KEY",
-    "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",
-)
-
-# Determine which API to use
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
 USE_OPENAI = bool(OPENAI_API_KEY)
 API_KEY = OPENAI_API_KEY if USE_OPENAI else OPENROUTER_API_KEY
-
-# API URLs
-OPENAI_BASE_URL = "https://api.openai.com/v1/chat/completions"
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
-BASE_URL = OPENAI_BASE_URL if USE_OPENAI else OPENROUTER_BASE_URL
-
-# Default models
-OPENAI_MODEL = "gpt-4o-mini"  # Cost-effective and capable
-OPENROUTER_MODEL = "anthropic/claude-3.5-sonnet"
-DEFAULT_MODEL = OPENAI_MODEL if USE_OPENAI else OPENROUTER_MODEL
-
-# App identification
-APP_NAME = "AI-Print-Estimator"
-SITE_URL = "http://localhost:8000"
-
-# Mock mode for testing
+BASE_URL = "https://api.openai.com/v1/chat/completions" if USE_OPENAI else "https://openrouter.ai/api/v1/chat/completions"
+DEFAULT_MODEL = "gpt-4o-mini" if USE_OPENAI else "anthropic/claude-3.5-sonnet"
 MOCK_MODE = os.getenv("MOCK_LLM", "true").lower() == "true"
 
-
 class LLMError(Exception):
-    """Custom exception for LLM-related errors"""
-
     pass
 
 
-async def call_llm(
-    prompt: str,
-    input_data: Dict[str, Any],
-    model: Optional[str] = None,
-    temperature: float = 0.1,
-    max_tokens: int = 2000,
-) -> Dict[str, Any]:
-    """
-    Call OpenRouter API with a formatted prompt and parse JSON response.
-
-    Args:
-        prompt: The system prompt template with placeholders
-        input_data: Dictionary to format into the prompt
-        model: Optional model override (uses DEFAULT_MODEL if not specified)
-        temperature: Controls randomness (0-1, lower is more deterministic)
-        max_tokens: Maximum tokens in response
-
-    Returns:
-        Parsed JSON dictionary from LLM response
-
-    Raises:
-        LLMError: If API call fails or response is invalid
-    """
-
-    # Use mock responses for testing
+async def call_llm(prompt: str, input_data: Dict[str, Any], model: Optional[str] = None, temperature: float = 0.1, max_tokens: int = 2000) -> Dict[str, Any]:
     if MOCK_MODE:
         return _mock_llm_response(prompt, input_data)
 
     if not API_KEY:
-        api_name = "OPENAI_API_KEY" if USE_OPENAI else "OPENROUTER_API_KEY"
-        raise LLMError(f"{api_name} not found in environment variables")
+        raise LLMError("API key not found")
 
-    # Format the prompt with input data
-    try:
-        formatted_prompt = prompt.format(**input_data)
-    except KeyError as e:
-        raise LLMError(f"Missing key in input_data for prompt formatting: {e}")
+    formatted_prompt = prompt.format(**input_data)
 
-    # Prepare the API request headers
-    if USE_OPENAI:
-        headers = {
-            "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json",
-        }
-    else:
-        headers = {
-            "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": SITE_URL,
-            "X-Title": APP_NAME,
-        }
+    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    if not USE_OPENAI:
+        headers.update({"HTTP-Referer": "http://localhost:8000", "X-Title": "AI-Print-Estimator"})
 
-    # Prepare payload - OpenAI format works for both APIs
     payload = {
         "model": model or DEFAULT_MODEL,
         "messages": [{"role": "user", "content": formatted_prompt}],
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "response_format": {"type": "json_object"}
     }
 
-    # Add JSON mode if supported
-    if USE_OPENAI:
-        payload["response_format"] = {"type": "json_object"}
-    else:
-        payload["response_format"] = {"type": "json_object"}
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(BASE_URL, headers=headers, json=payload)
+        if response.status_code != 200:
+            raise LLMError(f"API error {response.status_code}: {response.text}")
 
-    try:
-        # Make async HTTP request
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(BASE_URL, headers=headers, json=payload)
-
-            # Check for HTTP errors
-            if response.status_code != 200:
-                error_detail = response.text
-                api_name = "OpenAI" if USE_OPENAI else "OpenRouter"
-                raise LLMError(
-                    f"{api_name} API error (status {response.status_code}): {error_detail}"
-                )
-
-            # Parse response
-            response_data = response.json()
-
-            # Extract the assistant's message content
-            if "choices" not in response_data or len(response_data["choices"]) == 0:
-                api_name = "OpenAI" if USE_OPENAI else "OpenRouter"
-                raise LLMError(f"Invalid response structure from {api_name} API")
-
-            content = response_data["choices"][0]["message"]["content"]
-
-            # Parse JSON from content
-            try:
-                parsed_json = json.loads(content)
-                return parsed_json
-            except json.JSONDecodeError as e:
-                logger.error(
-                    "JSON parse failed in call_llm",
-                    extra={
-                        "json_error": str(e),
-                        "raw_content": content,
-                        "content_length": len(content) if content else 0,
-                    },
-                )
-                raise LLMError(
-                    f"Failed to parse JSON from LLM response: {e}\nContent: {content}"
-                )
-
-    except httpx.RequestError as e:
-        api_name = "OpenAI" if USE_OPENAI else "OpenRouter"
-        raise LLMError(f"Network error calling {api_name} API: {e}")
-    except Exception as e:
-        raise LLMError(f"Unexpected error in LLM call: {e}")
+        data = response.json()
+        content = data["choices"][0]["message"]["content"]
+        return json.loads(content)
 
 
 def call_llm_sync(
