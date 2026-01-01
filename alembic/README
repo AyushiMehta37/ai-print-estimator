@@ -1,0 +1,15 @@
+Alembic is a lightweight database migration tool for usage with the SQLAlchemy Database Toolkit for Python.
+
+Usage:
+
+- To create a new migration (after changing your models):
+    alembic revision --autogenerate -m "short description"
+
+- To apply the latest migrations:
+    alembic upgrade head
+
+- To rollback (downgrade):
+    alembic downgrade -1
+
+Edit alembic.ini to set your project's database URL.
+

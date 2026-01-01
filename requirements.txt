@@ -1,0 +1,28 @@
+# Core web framework
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+
+# HTTP client
+httpx>=0.24.0
+
+# Data validation
+pydantic>=2.0.0
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+
+# Database migrations
+alembic>=1.11.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# File upload handling
+python-multipart>=0.0.6
+
+# PDF processing
+pymupdf>=1.23.0
+
+
+

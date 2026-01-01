@@ -1,0 +1,263 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/order-orchestrator",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "c3da3e4c-0fde-4f21-bd86-0a232d425dd7",
+      "name": "Webhook",
+      "webhookId": "4faaf66d-6b4f-4ef0-9c8f-90d150097257"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2a1add13-1935-41e2-9315-e49d20b4a647",
+              "leftValue": "={{ $json.validation.valid }}",
+              "rightValue": "false",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "087745d2-4677-49ea-a972-5fcf80b89465",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "fromEmail": "=n8n@test.local",
+        "toEmail": "=csr@test.local",
+        "subject": "=Invalid Print Order",
+        "html": "=Order {{ $json.order_id }} is invalid.\nFlags: {{ $json.validation.flags }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        416,
+        -96
+      ],
+      "id": "7559a034-fb7a-4e45-bf84-74e715fc279d",
+      "name": "Send email",
+      "webhookId": "f5ffdabc-582e-40a6-a895-0f31b010249d",
+      "credentials": {
+        "smtp": {
+          "id": "2tx25GatVIxSCR6l",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A61P1CH8T",
+          "mode": "id"
+        },
+        "text": "=Invalid print order received\nOrder ID: {{ $json.order_id }}\nIssues: {{ $json.validation.flags }}\n",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        416,
+        96
+      ],
+      "id": "078fc4b0-d2e2-498e-a5b8-faa9d63169ea",
+      "name": "Send a message",
+      "webhookId": "bfaebbcc-86b9-4f68-86bc-c423c8a6a9fd",
+      "credentials": {
+        "slackApi": {
+          "id": "TE3qrkhM4NdAnkX8",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "limitWaitTime": true,
+        "resumeAmount": 24,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        624,
+        96
+      ],
+      "id": "c5b2d98d-3849-4c9c-be19-502668e64f61",
+      "name": "Wait",
+      "webhookId": "f36adc35-654a-4d01-937e-61d0dbbf1ac4"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://example.com/mis-webhook",
+        "sendBody": true,
+        "specifyBody": "={\n  \"order_id\": \"{{ $json.order_id }}\",\n  \"specs\": \"{{ $json.specs }}\",\n  \"pricing\": \"{{ $json.pricing }}\"\n}\n",
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "359111e8-5a9c-47d7-b897-b5543fcef768",
+      "name": "MIS Handoff"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "59141902-19f5-4ae8-91c5-9c59f515d643",
+              "leftValue": "={{ $json.approved }}\n",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        832,
+        96
+      ],
+      "id": "ec7f5a42-c242-4581-b69a-055dfe3ad588",
+      "name": "IF Approved"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email": {
+      "main": [
+        []
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "IF Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Approved": {
+      "main": [
+        [
+          {
+            "node": "MIS Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "e6ccf7fb-9e12-49a3-85ea-9c3d98b1f044",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ae89a55e7722fbe835611753c481df3d9e64799595ef386eb1231f65be11f67b"
+  },
+  "id": "7aMdVBiZRgK-bqckyTpfQ",
+  "tags": []
+}
