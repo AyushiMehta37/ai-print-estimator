@@ -232,10 +232,6 @@ python test_api.py --text "your order text"
 3. Update documentation
 4. Ensure all validation tests pass
 
-## License
-
-[Add your license information here]
-
 ## Support
 
 For issues or questions:
